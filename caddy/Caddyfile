@@ -1,0 +1,72 @@
+# vim: set backupcopy=yes :
+{
+	#admin localhost:8019
+	acme_dns duckdns 07f2b8b4-58ef-418f-a78f-101365a49465
+	# LetsEncrypt account
+	#email fake@email.com
+}
+
+(auth) {
+	basicauth {
+		mikle JDJhJDE0JFhoamZjVC9Nd1dsWWdBbE8wRHJ4anV4MXRucDdCZEN3ZlZodTl0bjlsU1ZqYVlOZ2RwZVcy
+		root JDJhJDE0JDJWMjNWdENvaUl1ZEdCbURRZkVDRU9MRWNBY2tKY3BvYmNVaVYwRXpNblE3TW1oVnRIMEp1
+	}
+}
+
+mbond.duckdns.org {
+	tls {
+		dns duckdns 3b57a4af-d438-4c83-9cd7-22c0b5dfd06d
+	}
+	respond * "TBD" 200
+}
+
+dashboard.ter224.duckdns.org {
+	import auth
+	reverse_proxy localhost:4646
+}
+
+wg.ter224.duckdns.org {
+	reverse_proxy wg-gen-web:8080
+}
+
+headscale.ter224.duckdns.org {
+	reverse_proxy headscale:80
+}
+
+reg.ter224.duckdns.org {
+	import auth
+	reverse_proxy registry:5000
+}
+
+pihole.ter224.duckdns.org {
+	# reverse_proxy pihole:80 
+	redir http://192.168.196.211:8080 302
+}
+
+wg2.ter224.duckdns.org {
+	reverse_proxy wg-access-server:8000
+}
+
+sb.ter224.duckdns.org {
+	import auth
+	reverse_proxy snippet-box:5000
+}
+
+zt.ter224.duckdns.org {
+	reverse_proxy zero-ui:4000
+}
+
+## Dashboard
+#https://dashboard.nm.ter224.duckdns.org {
+#	reverse_proxy http://127.0.0.1:8082
+#}
+#
+## API
+#https://api.nm.ter224.duckdns.org {
+#	reverse_proxy http://127.0.0.1:8081
+#}
+#
+## gRPC
+#https://grpc.nm.ter224.duckdns.org {
+#	reverse_proxy h2c://127.0.0.1:50051
+#}

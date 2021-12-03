@@ -1,0 +1,135 @@
+version: "3.4"
+
+volumes:
+  caddy_data: {}
+  caddy_conf: {}
+  wireguard_data: {}
+  wg_access_server_data: {}
+  snippet_data: {}
+  controller_data: {}
+  zero-ui_data: {}
+
+services:
+  ### https reverse proxy
+  caddy:
+    build: caddy/
+    image: reg.ter224.duckdns.org/caddy:latest
+    container_name: caddy
+    restart: unless-stopped
+    #network_mode: host # Wants ports 80 and 443!
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      # - $PWD/site:/srv # you could also serve a static site in site folder
+      - caddy_data:/data
+      - caddy_conf:/config
+
+  ####################
+  registry:
+    image: registry:2
+    container_name: registry
+    expose:
+      - "5000/tcp"
+        #network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./registry:/var/lib/registry
+
+  ####################
+  wg-gen-web:
+    image: vx3r/wg-gen-web:latest
+    restart: unless-stopped
+    #network_mode: host
+    expose:
+      - "8080/tcp"
+    volumes:
+      - wireguard_data:/data
+    environment:
+      - WG_CONF_DIR=/data
+      - OAUTH2_PROVIDER_NAME=github
+      - OAUTH2_PROVIDER=https://github.com
+      - OAUTH2_CLIENT_ID=39bba5d75d936f9a3f2a
+      - OAUTH2_CLIENT_SECRET=5adfd8a2cf64eb3fa52c08ba56251003a6367546
+      - OAUTH2_REDIRECT_URL=https://wg.ter224.duckdns.org/
+
+  headscale:
+    image: crisidev/headscale:0.11.0
+    command: headscale serve
+    restart: unless-stopped
+    #network_mode: host
+    expose:
+      - "80/tcp"
+    volumes:
+      - ./headscale:/etc/headscale
+
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    ports:
+      - "8080:80/tcp"
+    expose:
+      - "53/tcp"
+      - "53/udp"
+      - "67/udp"
+      - "80/tcp"
+
+    environment:
+      TZ: 'Europe/Moscow'
+      WEBPASSWORD: 'cement construct laurel reappear'
+      WEB_PORT: "80"
+    volumes:
+      - './etc-pihole/:/etc/pihole/'
+      - './etc-dnsmasq.d/:/etc/dnsmasq.d/'
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    #cap_add:
+    #  - NET_ADMIN
+    restart: unless-stopped
+
+  wg-access-server:
+    image: place1/wg-access-server
+    expose:
+      - "8000/tcp"
+    environment:
+      WG_ADMIN_PASSWORD: 'cement construct laurel reappear'
+      WG_WIREGUARD_PRIVATE_KEY: QKR08MIAL3EEYdgD9UjEoXhR8gSRj7tzYJMXsgJs8E0=
+    volumes:
+      - wg_access_server_data:/data
+
+  snippet-box:
+    image: pawelmalak/snippet-box:arm
+    volumes: 
+      - './snippet-box:/app/data'
+    expose:
+      - "5000/tcp"
+    restart: unless-stopped
+
+  zerotier:
+    image: dec0dos/zerotier-controller:latest
+    container_name: zu-controller
+    restart: unless-stopped
+    volumes:
+      - controller_data:/var/lib/zerotier-one
+    expose:
+      - "9993/tcp"
+    ports:
+      - "9993:9993/udp"
+  zero-ui:
+    image: dec0dos/zero-ui:latest
+    container_name: zu-main
+    restart: unless-stopped
+    depends_on:
+      - zerotier
+    volumes:
+      - controller_data:/var/lib/zerotier-one
+      - zero-ui_data:/app/backend/data
+    environment:
+      - ZU_CONTROLLER_ENDPOINT=http://zerotier:9993/
+      - ZU_SECURE_HEADERS=true
+      - ZU_DEFAULT_USERNAME=admin
+      - ZU_DEFAULT_PASSWORD=zero-ui
+    expose:
+      - "4000"
+
