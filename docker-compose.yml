@@ -8,9 +8,12 @@ volumes:
   snippet_data: {}
   controller_data: {}
   zero-ui_data: {}
+  gitea_data: {}
+  0bin_data: {}
+  qbittorrent_data: {}
+  portainer_data: {}
 
 services:
-  ### https reverse proxy
   caddy:
     build: caddy/
     image: reg.ter224.duckdns.org/caddy:latest
@@ -26,18 +29,15 @@ services:
       - caddy_data:/data
       - caddy_conf:/config
 
-  ####################
   registry:
     image: registry:2
     container_name: registry
     expose:
       - "5000/tcp"
-        #network_mode: host
     restart: unless-stopped
     volumes:
       - ./registry:/var/lib/registry
 
-  ####################
   wg-gen-web:
     image: vx3r/wg-gen-web:latest
     restart: unless-stopped
@@ -108,7 +108,6 @@ services:
 
   zerotier:
     image: dec0dos/zerotier-controller:latest
-    container_name: zu-controller
     restart: unless-stopped
     volumes:
       - controller_data:/var/lib/zerotier-one
@@ -118,7 +117,6 @@ services:
       - "9993:9993/udp"
   zero-ui:
     image: dec0dos/zero-ui:latest
-    container_name: zu-main
     restart: unless-stopped
     depends_on:
       - zerotier
@@ -133,3 +131,75 @@ services:
     expose:
       - "4000"
 
+  gitea:
+    image: gitea/gitea:1.15.7
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+    restart: unless-stopped
+    volumes:
+      - gitea_data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "3000/tcp"
+    ports:
+      - "222:22"
+
+  ascii:
+    build: ascii-live/
+    image: reg.ter224.duckdns.org/ascii-live:latest
+    expose:
+      - "8080/tcp"
+    restart: unless-stopped
+
+  0bin:
+    image: egon0/0bin-multiarch
+    expose:
+      - "80/tcp"
+    volumes:
+      - 0bin_data:/data
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Moscow
+      - WEBUI_PORT=8080
+    volumes:
+      - qbittorrent_data:/config
+      - /mnt/hdd/Download:/downloads
+    ports:
+      - 6881:6881
+      - 6881:6881/udp
+    expose:
+      - 8080/tcp
+    restart: unless-stopped
+  vaultwarden:
+    image: vaultwarden/server:latest
+    expose:
+      - "80/tcp"
+    restart: unless-stopped
+    volumes:
+      - ./vaultwarden:/data
+
+  psitransfer:
+    expose:
+      - '3000/tcp'
+    environment:
+      - PSITRANSFER_ADMIN_PASS=secret
+    volumes:
+      - '$PWD/data:/data'
+    image: hbuilder/psitransfer_arm
+
+  portainer:
+    expose:
+      - "9000/tcp"
+      - "8000/tcp"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    image: portainer/portainer-ce
+    restart: unless-stopped

@@ -10,7 +10,42 @@
 	basicauth {
 		mikle JDJhJDE0JFhoamZjVC9Nd1dsWWdBbE8wRHJ4anV4MXRucDdCZEN3ZlZodTl0bjlsU1ZqYVlOZ2RwZVcy
 		root JDJhJDE0JDJWMjNWdENvaUl1ZEdCbURRZkVDRU9MRWNBY2tKY3BvYmNVaVYwRXpNblE3TW1oVnRIMEp1
+		ter224 JDJhJDE0JGZDSFJRWXNyeExVWXZvbWJKSmszSmVDVElHZU54bjEudHFSa1d4eG5wZmszby5GYlRjMGFt
 	}
+}
+
+(auth_rproxy) {
+	# {domain} {host:port}
+	{args.0}.ter224.duckdns.org {
+		import auth
+		reverse_proxy {args.1}
+	}
+}
+
+(rproxy) {
+	{args.0}.ter224.duckdns.org {
+		reverse_proxy {args.1}
+	}
+}
+
+import auth_rproxy dashboard localhost:4646
+import auth_rproxy reg registry:5000
+import auth_rproxy sb snippet-box:5000
+import rproxy 0bin 0bin:3255
+import rproxy ascii ascii:8080
+import rproxy git gitea:3000
+import rproxy headscale headscale:80
+import rproxy pt psitransfer:3000
+import rproxy qbit qbittorrent:8080
+import rproxy vaultwarden vaultwarden:80
+import rproxy wg wg-gen-web:8080
+import rproxy wg2 wg-access-server:8000
+import rproxy zt zero-ui:4000
+import rproxy portainer portainer:9000
+
+pihole.ter224.duckdns.org {
+	# reverse_proxy pihole:80 
+	redir http://192.168.196.211:8080 302
 }
 
 mbond.duckdns.org {
@@ -19,54 +54,3 @@ mbond.duckdns.org {
 	}
 	respond * "TBD" 200
 }
-
-dashboard.ter224.duckdns.org {
-	import auth
-	reverse_proxy localhost:4646
-}
-
-wg.ter224.duckdns.org {
-	reverse_proxy wg-gen-web:8080
-}
-
-headscale.ter224.duckdns.org {
-	reverse_proxy headscale:80
-}
-
-reg.ter224.duckdns.org {
-	import auth
-	reverse_proxy registry:5000
-}
-
-pihole.ter224.duckdns.org {
-	# reverse_proxy pihole:80 
-	redir http://192.168.196.211:8080 302
-}
-
-wg2.ter224.duckdns.org {
-	reverse_proxy wg-access-server:8000
-}
-
-sb.ter224.duckdns.org {
-	import auth
-	reverse_proxy snippet-box:5000
-}
-
-zt.ter224.duckdns.org {
-	reverse_proxy zero-ui:4000
-}
-
-## Dashboard
-#https://dashboard.nm.ter224.duckdns.org {
-#	reverse_proxy http://127.0.0.1:8082
-#}
-#
-## API
-#https://api.nm.ter224.duckdns.org {
-#	reverse_proxy http://127.0.0.1:8081
-#}
-#
-## gRPC
-#https://grpc.nm.ter224.duckdns.org {
-#	reverse_proxy h2c://127.0.0.1:50051
-#}
