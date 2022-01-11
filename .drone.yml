@@ -3,9 +3,9 @@ name: default
 
 steps:
   - name: test
-    image: busybox
+    image: alpine
     commands:
-      - echo hello world
-      - sleep 4
+      - echo hello 
+      - echo world
 
 
