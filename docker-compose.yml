@@ -1,17 +1,9 @@
 version: "3.4"
 
 volumes:
-  caddy_data: {}
   caddy_conf: {}
   wireguard_data: {}
-  wg_access_server_data: {}
-  snippet_data: {}
-  controller_data: {}
-  zero-ui_data: {}
-  gitea_data: {}
-  0bin_data: {}
-  qbittorrent_data: {}
-  portainer_data: {}
+  ntfy_data: {}
 
 services:
   caddy:
@@ -19,15 +11,17 @@ services:
     image: reg.ter224.duckdns.org/caddy:latest
     container_name: caddy
     restart: unless-stopped
-    #network_mode: host # Wants ports 80 and 443!
     ports:
       - "80:80/tcp"
       - "443:443/tcp"
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
-      # - $PWD/site:/srv # you could also serve a static site in site folder
-      - caddy_data:/data
       - caddy_conf:/config
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy/data:/data
+      - ./www:/www
+      - ./www-globo:/www-globo
+      - ./qrazybox:/qrazybox
+      - /home/launcher/updates:/launcher
 
   registry:
     image: registry:2
@@ -41,7 +35,6 @@ services:
   wg-gen-web:
     image: vx3r/wg-gen-web:latest
     restart: unless-stopped
-    #network_mode: host
     expose:
       - "8080/tcp"
     volumes:
@@ -53,55 +46,31 @@ services:
       - OAUTH2_CLIENT_ID=39bba5d75d936f9a3f2a
       - OAUTH2_CLIENT_SECRET=5adfd8a2cf64eb3fa52c08ba56251003a6367546
       - OAUTH2_REDIRECT_URL=https://wg.ter224.duckdns.org/
+    deploy:
+      replicas: 0
+
+  filebrowser:
+    volumes:
+      - ./filebrowser/srv:/srv
+      - ./filebrowser/filebrowser.db:/database.db
+    expose:
+      - '80/tcp'
+    image: filebrowser/filebrowser
+    restart: unless-stopped
 
   headscale:
-    image: crisidev/headscale:0.11.0
+    image: headscale/headscale:0.15
     command: headscale serve
     restart: unless-stopped
-    #network_mode: host
     expose:
       - "80/tcp"
     volumes:
       - ./headscale:/etc/headscale
 
-  pihole:
-    container_name: pihole
-    image: pihole/pihole:latest
-    ports:
-      - "8080:80/tcp"
-    expose:
-      - "53/tcp"
-      - "53/udp"
-      - "67/udp"
-      - "80/tcp"
-
-    environment:
-      TZ: 'Europe/Moscow'
-      WEBPASSWORD: 'cement construct laurel reappear'
-      WEB_PORT: "80"
-    volumes:
-      - './etc-pihole/:/etc/pihole/'
-      - './etc-dnsmasq.d/:/etc/dnsmasq.d/'
-    # Recommended but not required (DHCP needs NET_ADMIN)
-    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
-    #cap_add:
-    #  - NET_ADMIN
-    restart: unless-stopped
-
-  wg-access-server:
-    image: place1/wg-access-server
-    expose:
-      - "8000/tcp"
-    environment:
-      WG_ADMIN_PASSWORD: 'cement construct laurel reappear'
-      WG_WIREGUARD_PRIVATE_KEY: QKR08MIAL3EEYdgD9UjEoXhR8gSRj7tzYJMXsgJs8E0=
-    volumes:
-      - wg_access_server_data:/data
-
   snippet-box:
-    image: pawelmalak/snippet-box:arm
+    image: pawelmalak/snippet-box:dev
     volumes: 
-      - './snippet-box:/app/data'
+      - ./snippet-box:/app/data
     expose:
       - "5000/tcp"
     restart: unless-stopped
@@ -110,19 +79,18 @@ services:
     image: dec0dos/zerotier-controller:latest
     restart: unless-stopped
     volumes:
-      - controller_data:/var/lib/zerotier-one
+      - ./zerotier/one:/var/lib/zerotier-one
     expose:
       - "9993/tcp"
-    ports:
-      - "9993:9993/udp"
+
   zero-ui:
     image: dec0dos/zero-ui:latest
     restart: unless-stopped
     depends_on:
       - zerotier
     volumes:
-      - controller_data:/var/lib/zerotier-one
-      - zero-ui_data:/app/backend/data
+      - ./zerotier/one:/var/lib/zerotier-one
+      - ./zerotier/ui:/app/backend/data
     environment:
       - ZU_CONTROLLER_ENDPOINT=http://zerotier:9993/
       - ZU_SECURE_HEADERS=true
@@ -138,7 +106,7 @@ services:
       - USER_GID=1000
     restart: unless-stopped
     volumes:
-      - gitea_data:/data
+      - ./gitea/data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     expose:
@@ -149,16 +117,18 @@ services:
   ascii:
     build: ascii-live/
     image: reg.ter224.duckdns.org/ascii-live:latest
+    deploy:
+      replicas: 4
     expose:
       - "8080/tcp"
     restart: unless-stopped
 
   0bin:
-    image: egon0/0bin-multiarch
+    image: gabe565/0bin
     expose:
       - "80/tcp"
     volumes:
-      - 0bin_data:/data
+      - ./0bin:/data
     restart: unless-stopped
 
   qbittorrent:
@@ -169,7 +139,7 @@ services:
       - TZ=Europe/Moscow
       - WEBUI_PORT=8080
     volumes:
-      - qbittorrent_data:/config
+      - ./qbittorrent:/config
       - /mnt/hdd/Download:/downloads
     ports:
       - 6881:6881
@@ -177,6 +147,7 @@ services:
     expose:
       - 8080/tcp
     restart: unless-stopped
+
   vaultwarden:
     image: vaultwarden/server:latest
     expose:
@@ -185,21 +156,122 @@ services:
     volumes:
       - ./vaultwarden:/data
 
-  psitransfer:
-    expose:
-      - '3000/tcp'
-    environment:
-      - PSITRANSFER_ADMIN_PASS=secret
-    volumes:
-      - '$PWD/data:/data'
-    image: hbuilder/psitransfer_arm
-
   portainer:
     expose:
       - "9000/tcp"
       - "8000/tcp"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
+      - ./portainer:/data
     image: portainer/portainer-ce
     restart: unless-stopped
+
+  drone-server:
+    image: drone/drone:2
+    expose:
+      - "80/tcp"
+      - "9000"
+    volumes:
+      - ./drone:/var/lib/drone/
+    restart: unless-stopped
+    depends_on:
+      - gitea
+    environment:
+      # DRONE_OPEN=true
+      # DRONE_GITEA=true
+      # DRONE_DEBUG=true
+      # DRONE_ADMIN=mikle
+      # DRONE_USER_CREATE=username:mikle,admin:true
+      # DRONE_HOST=http://drone-server:80
+      # DRONE_TLS_AUTOCERT=false
+      # DRONE_AGENTS_ENABLED=true
+
+      - DRONE_GITEA_SERVER=https://git.ter224.duckdns.org
+      - DRONE_GITEA_CLIENT_ID=89f4e89b-418d-41ec-887b-f5662441e185
+      - DRONE_GITEA_CLIENT_SECRET=Wzng9aDQE31F2khebf46cj5fYRl1dUW0gtmLhDymP5AY
+
+      - DRONE_GIT_ALWAYS_AUTH=false
+      - DRONE_RPC_SECRET=df0e231c7b801b2d48113cb9819bc4ca
+      - DRONE_SERVER_HOST=drone.ter224.duckdns.org
+      - DRONE_SERVER_PROTO=https
+      # DRONE_SERVER_PORT=:80
+      # DRONE_LOGS_TRACE=true
+
+  drone-runner-docker:
+    image: drone/drone-runner-docker:1
+    #image: ruanbekker/drone-agent:basic-auth-1.2.1
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - 3000
+    environment:
+      - DRONE_RPC_PROTO=https
+      - DRONE_RPC_HOST=drone.ter224.duckdns.org
+      - DRONE_RPC_SECRET=df0e231c7b801b2d48113cb9819bc4ca
+      - DRONE_RUNNER_CAPACITY=2
+      - DRONE_RUNNER_NAME=first-runner
+      # DRONE_LOGS_TRACE=true
+
+  ntfy:
+    image: binwiederhier/ntfy:v1.27.2
+    command: serve
+    restart: unless-stopped
+    deploy:
+      replicas: 0
+    volumes:
+      - ntfy_data:/var/cache/ntfy
+    expose:
+      - "80/tcp"
+    environment:
+      - NTFY_BEHIND_PROXY=true
+    
+  openspeedtest:
+    image: openspeedtest/latest
+    restart: unless-stopped
+    expose:
+      - "3000/tcp"
+    deploy:
+      replicas: 2
+
+#  guacd:
+#    image: guacamole/guacd
+#    restart: unless-stopped
+#    expose:
+#      - "4822"
+#
+#  guacamole:
+#    image: guacamole/guacamole
+#    restart: unless-stopped
+#    expose:
+#      - "8080"
+#    environment:
+#      - GUACD_HOSTNAME=guacd
+#      - POSTGRES_HOSTNAME=postgres
+#      - POSTGRES_DATABASE=guac
+#      - POSTGRES_USER=guac
+#      - POSTGRES_PASSWORD=helloworld
+#  
+#  postgres:
+#    image: postges
+#    restart: unless-stopped
+#    environment:
+#      - POSTGRES_USER=postgres
+#      - POSTGRES_PASSWORD=postgres
+#    expose:
+#      - "5432"
+#    volumes:
+#      - postgres_data:/var/lib/postgresql/data
+#
+  lingva:
+    image: reg.ter224.duckdns.org/lingva-translate
+    build: lingva-translate/
+    environment:
+      - site_domain=lingva.ter224.duckdns.org
+      - dark_theme=true
+    expose:
+      - "3000/tcp"
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+
