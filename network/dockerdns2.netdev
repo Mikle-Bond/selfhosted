@@ -1,0 +1,7 @@
+[NetDev]
+Name=dockerdns2
+Kind=macvlan
+
+[MACVLAN]
+Mode=bridge
+

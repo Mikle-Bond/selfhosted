@@ -1,96 +1,468 @@
-version: "3.4"
+version: "3.8"
 
 volumes:
   caddy_conf: {}
   wireguard_data: {}
+  dockerhosts: {}
   ntfy_data: {}
+    # sqldata: {}
+    # dnsconfig: {}
+    # mosquitto_data: {}
+    # mosquitto_logs: {}
+  nextcloud:
+    external:
+      name: nextcloud
+  nextcloud_data:
+    external:
+      name: nextcloud_data
+  portainer_data: {}
+
+
+networks:
+  docker-socket-rw: {}
+  docker-socket-ro: {}
+  caddy:
+    external: true
+  dns:
+    external: true
+
+secrets:
+  headscale:
+    file: ./secrets/headscale/private.key
+  flame_password:
+    file: ./secrets/flame/password.txt
+
+x-lsio: &lsio
+  environment:
+    - PUID
+    - PGID
+    - TZ
+
+x-lsio-dict: &lsiodict
+  PUID:
+  PGID:
+  TZ:
+
+
+x-default: &default
+  restart: unless-stopped
+  networks:
+    - caddy
+
+x-failed:
+  labels:
+    virtual.port: 8000
+    caddy: 'import rproxy {{index .Labels "com.docker.compose.service"}} {{$$port:=index .Labels "virtual.port"}}{{upstreams $$port}}'
+    caddy_4: forms.mbond.duckdns.org
+    caddy_4.tls.dns: duckdns "{env.DUCKDNS_TOKEN_MBOND}"
+    caddy_4.reverse_proxy: "* https://docs.google.com"
+    caddy_4.reverse_proxy.header_up: "Host {http.reverse_proxy.upstream.hostport}"
+    caddy_4.reverse_proxy.header_down: 'location \"^(.*https?://)([^/]+)(.*)$$\" \"$$1forms.mbond.duckdns.org$$3\"'
+    caddy_4.reverse_proxy.header_down: "-cross-origin-opener-policy"
+
+x-disabled:
+  dockerhost:
+    restart: unless-stopped
+    build:
+      context: build/caddy-l4
+      args:
+        - GOPROXY=https://goproxy.io,https://proxy.golang.org,direct
+    network_mode: host
+    links:
+      - caddy:caddy
+
+  qr2:
+    <<: *default
+    image: reg.${BASE_DOMAIN}/qr-code-generator/web:latest # ghcr.io/pjanczyk/qr-code-generator/web:latest
+    # NB: compose files do not support building from git when buildx is used.
+    # Thus, run as `DOCKER_BUILDX=0 docker compose build qr2`
+    # NB: this build fails due to censoring ISP, use proxy
+    build: "https://github.com/pjanczyk/qr-code-generator.git#:web"
+    environment:
+      QR-CODE-GENERATOR_BASE-URL: "https://qr2.${BASE_DOMAIN}"
+      QR-CODE-GENERATOR_QR-CODE-SERVICE-ADDRESS: qr2-backend:5000
+    expose:
+      - "8000/tcp"
+    depends_on:
+      - qr2-backend
+    labels:
+      caddy: import rproxy qr2 "{{upstreams 8000}}"
+      flame.type: app
+      flame.name: QRcode Generator 2
+      flame.url: "qr2.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
+      homepage.name: QRcode 2
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
+      homepage.href: "https://qr2.${BASE_DOMAIN}"
+      homepage.group: Docker services
+      homepage.description: Another QRcode Generator
+  qr2-backend:
+    <<: *default
+    image: reg.${BASE_DOMAIN}/qr-code-generator/qr-code-service:latest
+    build: "https://github.com/pjanczyk/qr-code-generator.git#:qr-code-service"
+    expose:
+      - "5000/tcp"
+
+
 
 services:
+  hosts:
+    restart: unless-stopped
+    image: jwilder/docker-gen
+    command: -watch /input/docker.hosts.tmpl /output/docker.hosts
+    volumes:
+      - ./conf/hosts/:/input
+      - dockerhosts:/output
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+    environment:
+      - TZ
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+    depends_on:
+      - docker-socket-proxy
+    networks:
+      - docker-socket-ro
+
+  dns:
+    restart: unless-stopped
+    container_name: dns
+    build: build/coredns
+    image: reg.${BASE_DOMAIN}/coredns
+    volumes:
+      - dockerhosts:/data:ro
+    command: |
+      ash -c "cat > Corefile <<EOF && cat Corefile && /usr/bin/env coredns
+      doc {
+        hosts /data/docker.hosts
+        log
+      }
+      EOF"
+    networks:
+      dns:
+        ipv4_address: "169.254.0.53"
+
+
+  portainer-socket:
+    <<: *default
+    networks:
+      - docker-socket-rw
+    image: tecnativa/docker-socket-proxy
+    expose:
+      - "2375/tcp"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - CONTAINERS=1
+      - INFO=1
+      - IMAGES=1
+      - POST=1
+      - NETWORKS=1
+      - VOLUMES=1
+
+  portainer:
+    <<: *default
+    networks:
+      - caddy
+      - docker-socket-rw
+    image: portainer/portainer-ce:latest
+    command: -H tcp://portainer-socket:2375
+    depends_on:
+      - portainer-socket
+    container_name: portainer
+    expose:
+      - "8000/tcp"
+      - "9000/tcp"
+    volumes:
+      - portainer_data:/data
+    labels:
+      caddy_1: import rproxy portainer "{{upstreams 9000}}"
+      caddy_2: import rproxy edge "{{upstreams 8000}}"
+
+
   caddy:
-    build: caddy/
-    image: reg.ter224.duckdns.org/caddy:latest
+    build:
+      context: build/caddy
+      args:
+        - GOPROXY=https://goproxy.io,https://proxy.golang.org,direct
+    image: reg.ter224.duckdns.org/caddy:${CADDY_VERSION:-latest}
     container_name: caddy
     restart: unless-stopped
+    networks:
+      caddy:
+      dns:
+        ipv4_address: "169.254.0.100"
+    environment:
+      - CADDY_INGRESS_NETWORKS=caddy
+      - CADDY_DOCKER_CADDYFILE_PATH=/config/Caddyfile.globals
+      - CADDY_DOCKER_PROCESS_CADDYFILE=true
+      - BASE_DOMAIN
+    env_file: secrets/caddy/credentials.env # TODO
     ports:
-      - "80:80/tcp"
-      - "443:443/tcp"
+      - published: 10443
+        target: 443
+          #mode: host
+      - published: 10080
+        target: 80
+          #mode: host
+      - "443:443/udp"
     volumes:
-      - caddy_conf:/config
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
-      - ./caddy/data:/data
-      - ./www:/www
-      - ./www-globo:/www-globo
-      - ./qrazybox:/qrazybox
-      - /home/launcher/updates:/launcher
+      - /var/run/docker.sock:/var/run/docker.sock # TODO
+      - ./conf/caddy:/config
+      - ./data/caddy:/data
+      - ./static/qrazybox:/qrazybox
+      - ./static/www:/www
+      # /home/launcher/updates:/launcher
+      - nextcloud:/nextcloud/var/www/html
+      - nextcloud_data:/nextcloud/var/nextdata
+    labels:
+      caddy_0: "${BASE_DOMAIN}"
+      caddy_0.redir: "https://flame.${BASE_DOMAIN}"
+      #caddy_0.import: tlsdns
+      #caddy_0.root: "* /www"
+      #caddy_0.file_server:
+      #caddy_0.templates:
+
+      caddy_1: "qrazybox.${BASE_DOMAIN}"
+      caddy_1.import: tlsdns
+      caddy_1.root: "* /qrazybox/"
+      caddy_1.tls.alpn: h2 h3
+      caddy_1.file_server.hide: .git
+
+      caddy_2: mbond.duckdns.org
+      caddy_2.tls.dns: duckdns "{env.DUCKDNS_TOKEN_MBOND}"
+      caddy_1.tls.alpn: h2 h3
+      caddy_2.respond: "* TBD 200"
+      caddy_2.log:
+
+
+  dashmachine:
+    <<: *default
+    image: rmountjoy/dashmachine
+    expose:
+      - "5000/tcp"
+    volumes:
+      - ./data/dashmachine:/dashmachine/dashmachine/user_data
+    labels:
+      caddy: import rproxy dashmachine "{{upstreams 5000}}"
+      flame.type: app
+      flame.name: DashMachine
+      flame.url: "dashmachine.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=dashmachine:5000&size=32&format=png"
+      homepage.name: DashMachine
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=dashmachine:5000&size=32&format=png"
+      homepage.href: "https://dashmachine.${BASE_DOMAIN}"
+      homepage.group: Docker services
+      homepage.description: DashMachine homepage
+
+
+  flame:
+    <<: *default
+    image: pawelmalak/flame
+      # TODO: point it to docker-socket-proxy
+      # TODO: check out https://github.com/GeorgeSG/flame
+      # TODO: also https://github.com/pawelmalak/flame/pull/396
+    depends_on:
+      - iconserver
+      - docker-socket-proxy
+    volumes:
+      - ./data/flame:/app/data
+      # /var/run/docker.sock:/var/run/docker.sock:ro 
+    expose:
+      - "5005/tcp"
+    labels:
+      caddy: import rproxy flame "{{upstreams 5005}}"
+      plugsy.name: flame
+      plugsy.category: TEST
+      plugsy.icon: "@styled-icons/feather/Database"
+      plugsy.link: "https://flame.${BASE_DOMAIN}"
+    secrets:
+      - flame_password
+    environment:
+      - PASSWORD_FILE=/run/secrets/flame_password
+
 
   registry:
+    <<: *default
     image: registry:2
     container_name: registry
     expose:
       - "5000/tcp"
-    restart: unless-stopped
     volumes:
-      - ./registry:/var/lib/registry
+      - ./data/registry:/var/lib/registry
+    labels:
+      caddy: import auth_rproxy reg "{{upstreams 5000}}"
 
-  wg-gen-web:
-    image: vx3r/wg-gen-web:latest
-    restart: unless-stopped
-    expose:
-      - "8080/tcp"
-    volumes:
-      - wireguard_data:/data
-    environment:
-      - WG_CONF_DIR=/data
-      - OAUTH2_PROVIDER_NAME=github
-      - OAUTH2_PROVIDER=https://github.com
-      - OAUTH2_CLIENT_ID=39bba5d75d936f9a3f2a
-      - OAUTH2_CLIENT_SECRET=5adfd8a2cf64eb3fa52c08ba56251003a6367546
-      - OAUTH2_REDIRECT_URL=https://wg.ter224.duckdns.org/
-    deploy:
-      replicas: 0
-
-  filebrowser:
-    volumes:
-      - ./filebrowser/srv:/srv
-      - ./filebrowser/filebrowser.db:/database.db
-    expose:
-      - '80/tcp'
-    image: filebrowser/filebrowser
-    restart: unless-stopped
-
-  headscale:
-    image: headscale/headscale:0.15
-    command: headscale serve
-    restart: unless-stopped
+  registry-ui:
+    <<: *default
+    image: joxit/docker-registry-ui:latest
+    depends_on:
+      - registry
     expose:
       - "80/tcp"
-    volumes:
-      - ./headscale:/etc/headscale
+    environment:
+      - DELETE_IMAGES=false
+      - REGISTRY_TITLE=ter224 Private Docker Registry
+      - REGISTRY_URL=https://reg.${BASE_DOMAIN}
+      - NGINX_PROXY_PASS_URL=http://registry:5000
+      - SINGLE_REGISTRY=true
+    labels:
+      caddy: import rproxy registry "{{upstreams 80}}"
+      flame.type: app
+      flame.name: Docker Regisry UI
+      flame.url: "registry.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=registry-ui:80&size=32&format=png"
+      homepage.name: Docker Regisry UI
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=registry-ui:80&size=32&format=png"
+      homepage.href: "https://registry.${BASE_DOMAIN}"
+      homepage.group: Docker services
+      homepage.description: Custom UI for private Docker registry
 
-  snippet-box:
-    image: pawelmalak/snippet-box:dev
-    volumes: 
-      - ./snippet-box:/app/data
+  whoami:
+    <<: *default
+    image: jwilder/whoami
+
+
+  echo-server:
+    restart: "no"
+    image: itzg/web-debug-server # ealen/echo-server # mendhak/http-https-echo:26 # greenstatic/echo-ip
+    environment: []
+      #BIND: 192.168.196.158:80
+    network_mode: host
+    container_name: echo-server
+
+  test:
+    <<: *default
+    image: mendhak/http-https-echo:26 # greenstatic/echo-ip
+    labels:
+      caddy: import rproxy test "{{upstreams 8080}}"
+
+
+  headscale:
+    <<: *default
+    image: headscale/headscale:0.15
+    command: headscale serve
     expose:
-      - "5000/tcp"
-    restart: unless-stopped
+      - "80/tcp"
+      - "9090/tcp" # metrics
+      - "50443/tcp" # grpc
+    volumes:
+      - ./conf/headscale:/etc/headscale
+      - ./data/headscale:/var/headscale
+    secrets:
+      - headscale # /var/secrets/headscale
+    labels:
+      caddy: "headscale.${BASE_DOMAIN}"
+      caddy.0_import: tlsdns
+
+      caddy.1_handle: /metrics
+      caddy.1_handle.import: auth
+      caddy.1_handle.reverse_proxy: "{{upstreams 9090}}"
+
+        #caddy.2_handle_path: /grpc
+        #caddy.2_handle_path.reverse_proxy: "{{upstreams grpc 50443}}" 
+
+      caddy.3_handle.reverse_proxy: "{{upstreams 80}}"
+        # flame.type: app
+        # flame.name: Headscale
+        # flame.url: "https://headscale.${BASE_DOMAIN}/"
+        # flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=tailscale.com&size=32&format=png"
+
+
+
+  iconserver:
+    <<: *default
+    image: matthiasluedtke/iconserver
+    environment:
+      - PORT=80
+      - TZ
+      - SERVER_MODE=download
+    expose:
+      - "80/tcp"
+    labels:
+      caddy: import rproxy iconserver "{{upstreams 80}}"
+      flame.type: app
+      flame.name: Icon Server
+      flame.url: "https://iconserver.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=iconserver&size=32&format=png"
+
+  favicon:
+    <<: *default
+    build: build/favicon_proxy
+    volumes:
+      - ./conf/favicon:/app/conf
+    environment:
+      - PORT=80
+      - TZ
+    expose:
+      - "80/tcp"
+    labels:
+      caddy: import rproxy favicon "{{upstreams 80}}"
+      flame.type: app
+      flame.name: Favicon Proxy
+      flame.url: "https://favicon.${BASE_DOMAIN}/"
+      flame.icon: "http://favicon.${BASE_DOMAIN}/favicon"
+
+
+  openspeedtest:
+    <<: *default
+    image: openspeedtest/latest
+    expose:
+      - "3000/tcp"
+    labels:
+      caddy: "openspeedtest.${BASE_DOMAIN}"
+      caddy.reverse_proxy: "{{upstreams 3000}}"
+      caddy.reverse_proxy.transport: "http"
+      caddy.reverse_proxy.transport.compression: "off"
+      # NB: https://github.com/openspeedtest/Speed-Test/issues/4#issuecomment-1229157193
+      # It is said that some combination of these is needed...
+      #caddy.reverse_proxy.flush_interval: "-1"
+      #caddy.reverse_proxy.buffer_requests: 
+      caddy.reverse_proxy.max_buffer_size: "50MiB"
+      flame.type: app
+      flame.name: OpenSpeedTest
+      flame.url: "https://openspeedtest.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=openspeedtest:3000&size=32&format=png"
+      homepage.name: OpenSpeedTest
+      homepage.icon: openspeedtest
+      homepage.href: "https://openspeedtest.${BASE_DOMAIN}"
+      homepage.group: Docker services
+      homepage.description: Opensource speed measurement tool
+
+
+  ntfy:
+    <<: *default
+    image: binwiederhier/ntfy:v1.27.2
+    command: serve
+    volumes:
+      - ntfy_data:/var/cache/ntfy
+    expose:
+      - "80/tcp"
+    environment:
+      - NTFY_BEHIND_PROXY=true
+    labels:
+      caddy: import rproxy ntfy "{{upstreams 80}}"
+      flame.type: app
+      flame.name: NTFY
+      flame.url: "https://ntfy.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=ntfy&size=32&format=png"
+
 
   zerotier:
+    <<: *default
     image: dec0dos/zerotier-controller:latest
-    restart: unless-stopped
     volumes:
-      - ./zerotier/one:/var/lib/zerotier-one
+      - ./data/zerotier:/var/lib/zerotier-one
     expose:
       - "9993/tcp"
 
+
   zero-ui:
+    <<: *default
     image: dec0dos/zero-ui:latest
-    restart: unless-stopped
     depends_on:
       - zerotier
     volumes:
-      - ./zerotier/one:/var/lib/zerotier-one
-      - ./zerotier/ui:/app/backend/data
+      - ./data/zerotier:/var/lib/zerotier-one
+      - ./data/zero-ui:/app/backend/data
     environment:
       - ZU_CONTROLLER_ENDPOINT=http://zerotier:9993/
       - ZU_SECURE_HEADERS=true
@@ -98,180 +470,313 @@ services:
       - ZU_DEFAULT_PASSWORD=zero-ui
     expose:
       - "4000"
+    labels:
+      caddy: import rproxy zt "{{upstreams 4000}}"
+      flame.type: app
+      flame.name: ZeroTier
+      flame.url: "https://zt.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=my.zerotier.com&size=32&format=png"
 
-  gitea:
-    image: gitea/gitea:1.15.7
-    environment:
-      - USER_UID=1000
-      - USER_GID=1000
-    restart: unless-stopped
-    volumes:
-      - ./gitea/data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-    expose:
-      - "3000/tcp"
-    ports:
-      - "222:22"
 
   ascii:
-    build: ascii-live/
-    image: reg.ter224.duckdns.org/ascii-live:latest
-    deploy:
-      replicas: 4
+    <<: *default
+    build: https://github.com/hugomd/ascii-live.git
+    image: reg.${BASE_DOMAIN}/ascii-live:latest
     expose:
       - "8080/tcp"
-    restart: unless-stopped
+    labels:
+      caddy: import rproxy ascii "{{upstreams 8080}}"
 
-  0bin:
-    image: gabe565/0bin
-    expose:
-      - "80/tcp"
-    volumes:
-      - ./0bin:/data
-    restart: unless-stopped
-
-  qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Moscow
-      - WEBUI_PORT=8080
-    volumes:
-      - ./qbittorrent:/config
-      - /mnt/hdd/Download:/downloads
-    ports:
-      - 6881:6881
-      - 6881:6881/udp
-    expose:
-      - 8080/tcp
-    restart: unless-stopped
 
   vaultwarden:
+    <<: *default
     image: vaultwarden/server:latest
     expose:
       - "80/tcp"
-    restart: unless-stopped
     volumes:
-      - ./vaultwarden:/data
+      - ./data/vaultwarden:/data
+    labels:
+      caddy: import rproxy vaultwarden "{{upstreams 80}}"
+      flame.type: app
+      flame.name: Bitwarden
+      flame.url: "https://vaultwarden.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=vaultwarden&size=32&format=png"
 
-  portainer:
-    expose:
-      - "9000/tcp"
-      - "8000/tcp"
+
+  snapdrop:
+    <<: *default
+    <<: *lsio
+    image: lscr.io/linuxserver/snapdrop:latest
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./portainer:/data
-    image: portainer/portainer-ce
-    restart: unless-stopped
-
-  drone-server:
-    image: drone/drone:2
+      - ./data/snapdrop:/config
+        # TODO: that's not a config folder, bro...
     expose:
       - "80/tcp"
-      - "9000"
-    volumes:
-      - ./drone:/var/lib/drone/
-    restart: unless-stopped
+    labels:
+      caddy: import rproxy snapdrop "{{upstreams 80}}"
+      flame.type: app
+      flame.name: Snapdrop
+      flame.url: "https://snapdrop.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=snapdrop&size=32&format=png"
+
+
+  homepage:
+    <<: *default
+    image: ghcr.io/benphelps/homepage:latest
+    expose:
+      - "3000/tcp"
+    environment:
+      - TZ
+      - PUID
+      - PGID
+      - DOCKER_HOST=docker-socket-proxy:2375
+        # TODO: is this the setting, or the one in /app/config/docker.yaml?
     depends_on:
-      - gitea
-    environment:
-      # DRONE_OPEN=true
-      # DRONE_GITEA=true
-      # DRONE_DEBUG=true
-      # DRONE_ADMIN=mikle
-      # DRONE_USER_CREATE=username:mikle,admin:true
-      # DRONE_HOST=http://drone-server:80
-      # DRONE_TLS_AUTOCERT=false
-      # DRONE_AGENTS_ENABLED=true
-
-      - DRONE_GITEA_SERVER=https://git.ter224.duckdns.org
-      - DRONE_GITEA_CLIENT_ID=89f4e89b-418d-41ec-887b-f5662441e185
-      - DRONE_GITEA_CLIENT_SECRET=Wzng9aDQE31F2khebf46cj5fYRl1dUW0gtmLhDymP5AY
-
-      - DRONE_GIT_ALWAYS_AUTH=false
-      - DRONE_RPC_SECRET=df0e231c7b801b2d48113cb9819bc4ca
-      - DRONE_SERVER_HOST=drone.ter224.duckdns.org
-      - DRONE_SERVER_PROTO=https
-      # DRONE_SERVER_PORT=:80
-      # DRONE_LOGS_TRACE=true
-
-  drone-runner-docker:
-    image: drone/drone-runner-docker:1
-    #image: ruanbekker/drone-agent:basic-auth-1.2.1
-    restart: unless-stopped
+      - docker-socket-proxy
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/homepage:/app/config
+    labels:
+      caddy: import rproxy homepage "{{upstreams 3000}}"
+      flame.type: app
+      flame.name: Homepage
+      flame.url: "https://homepage.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=homepage:3000&size=32&format=png"
+
+
+  netdata:
+    <<: *default
+    image: netdata/netdata:stable
+    hostname: "netdata.${BASE_DOMAIN}"
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    environment:
+      - TZ
+      - PGID
+      - PUID
+      - DO_NOT_TRACK=1
+      - DOCKER_HOST=docker-socket-proxy:2375
+    depends_on:
+      - docker-socket-proxy
+    volumes:
+      - ./conf/netdata:/etc/netdata
+      - ./data/netdata/lib:/var/lib/netdata
+      - ./data/netdata/cache:/var/cache/netdata
+        # TODO: maybe move cache to volume
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
     expose:
-      - 3000
-    environment:
-      - DRONE_RPC_PROTO=https
-      - DRONE_RPC_HOST=drone.ter224.duckdns.org
-      - DRONE_RPC_SECRET=df0e231c7b801b2d48113cb9819bc4ca
-      - DRONE_RUNNER_CAPACITY=2
-      - DRONE_RUNNER_NAME=first-runner
-      # DRONE_LOGS_TRACE=true
+      - "19999/tcp"
+    labels:
+      caddy: import rproxy netdata "{{upstreams 19999}}"
+      flame.type: app
+      flame.name: Netdata
+      flame.url: "https://netdata.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=netdata:19999&size=32&format=png"
 
-  ntfy:
-    image: binwiederhier/ntfy:v1.27.2
-    command: serve
-    restart: unless-stopped
-    deploy:
-      replicas: 0
+
+  diun:
+    <<: *default
+    build: build/diun
     volumes:
-      - ntfy_data:/var/cache/ntfy
+      - ./data/diun:/data
+      - ./conf/diun:/conf
+    environment:
+      S6_KEEP_ENV: 1
+      <<: *lsiodict
+
+      LOG_LEVEL: info
+      LOG_JSON: "false"
+      DIUN_WATCH_WORKERS: 20
+      DIUN_WATCH_SCHEDULE: "0 */6 * * *"
+      DIUN_PROVIDERS_DOCKER: "true"
+      DIUN_PROVIDERS_DOCKER_ENDPOINT: tcp://docker-socket-proxy:2375
+      DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
+
+      DIUN_NOTIF_SCRIPT_CMD: /conf/notify.sh
+      NTFY_URL: "http://ntfy/diun"
+    depends_on:
+      - docker-socket-proxy
+
+    labels:
+      diun.enable: "true"
+
+
+  svgomg:
+    <<: *default
+    build: build/svgomg
+    command: [] # WUT?
+    image: reg.${BASE_DOMAIN}/svgomg:latest
+    expose:
+      - "8080/tcp"
+    labels:
+      caddy: import rproxy svgomg "{{upstreams 8080}}"
+      flame.type: app
+      flame.name: SVGOMG
+      flame.url: "https://svgomg.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=svgomg:8080&size=32&format=png"
+      homepage.name: SVGOMG
+      homepage.icon: SVGOMG
+      homepage.href: "https://svgomg.${BASE_DOMAIN}"
+      homepage.group: Docker services
+      homepage.description: SVG optimizations tool
+
+  qr:
+    <<: *default
+    image: bizzycolah/qrcode-generator:latest
     expose:
       - "80/tcp"
-    environment:
-      - NTFY_BEHIND_PROXY=true
-    
-  openspeedtest:
-    image: openspeedtest/latest
-    restart: unless-stopped
-    expose:
-      - "3000/tcp"
-    deploy:
-      replicas: 2
+    labels:
+      caddy: import rproxy qr "{{upstreams 80}}"
+      flame.type: app
+      flame.name: QRcode Generator
+      flame.url: "qr.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
+      homepage.name: QRcode 
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
+      homepage.href: "https://qr.${BASE_DOMAIN}"
+      homepage.group: Docker services
+      homepage.description: QRcode Generator
 
-#  guacd:
-#    image: guacamole/guacd
-#    restart: unless-stopped
-#    expose:
-#      - "4822"
-#
-#  guacamole:
-#    image: guacamole/guacamole
-#    restart: unless-stopped
-#    expose:
-#      - "8080"
-#    environment:
-#      - GUACD_HOSTNAME=guacd
-#      - POSTGRES_HOSTNAME=postgres
-#      - POSTGRES_DATABASE=guac
-#      - POSTGRES_USER=guac
-#      - POSTGRES_PASSWORD=helloworld
-#  
-#  postgres:
-#    image: postges
-#    restart: unless-stopped
-#    environment:
-#      - POSTGRES_USER=postgres
-#      - POSTGRES_PASSWORD=postgres
-#    expose:
-#      - "5432"
-#    volumes:
-#      - postgres_data:/var/lib/postgresql/data
-#
-  lingva:
-    image: reg.ter224.duckdns.org/lingva-translate
-    build: lingva-translate/
-    environment:
-      - site_domain=lingva.ter224.duckdns.org
-      - dark_theme=true
-    expose:
-      - "3000/tcp"
-    restart: unless-stopped
-    deploy:
-      replicas: 1
 
+  docker-socket-proxy:
+    <<: *default
+    networks:
+      - caddy
+      - docker-socket-ro
+    image: tecnativa/docker-socket-proxy
+    expose:
+      - "2375/tcp"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - INFO=1
+
+
+  deck-chores-socket:
+    <<: *default
+    networks:
+      - docker-socket-rw
+    image: tecnativa/docker-socket-proxy
+    expose:
+      - "2375/tcp"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - POST=1
+      - EXEC=1
+
+
+  deck-chores:
+    <<: *default
+    networks:
+      - docker-socket-rw
+    depends_on:
+      - deck-chores-socket
+    image: funkyfuture/deck-chores:1
+    environment:
+      TIMEZONE: ${TZ}
+      DOCKER_HOST: tcp://deck-chores-socket:2375
+      DEFAULT_FLAGS: service
+
+
+  archivebox:
+    # Usage:
+    #     docker-compose run archivebox init --setup
+    #     docker-compose up
+    #     echo "https://example.com" | docker-compose run archivebox archivebox add
+    #     docker-compose run archivebox add --depth=1 https://example.com/some/feed.rss
+    #     docker-compose run archivebox config --set PUBLIC_INDEX=True
+    #     docker-compose run archivebox help
+    # Documentation:
+    #     https://github.com/ArchiveBox/ArchiveBox/wiki/Docker#docker-compose
+    <<: *default
+      # image: archivebox/archivebox:master
+      # NB: temporary override image, see https://github.com/ArchiveBox/ArchiveBox/issues/991
+    image: turian/archivebox:kludge-984-UTF8-bug
+    command: server --quick-init 0.0.0.0:3000
+    environment:
+      - ALLOWED_HOSTS=*
+      - MEDIA_MAX_SIZE=750m
+      - SEARCH_BACKEND_ENGINE=sonic
+      - SEARCH_BACKEND_HOST_NAME=sonic
+      - SEARCH_BACKEND_PASSWORD
+    volumes:
+      - ./data/archivebox/archive:/data
+    healthcheck:
+      test: curl --silent http://localhost:3000
+      interval: 1m30s
+      timeout: 20s
+      retries: 15
+      start_period: 40s
+
+    labels:
+      caddy: import rproxy archivebox "{{upstreams 3000}}"
+      flame.type: app
+      flame.name: ArchiveBox
+      flame.url: "archivebox.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=archivebox:3000&size=32&format=png"
+      homepage.name: ArchiveBox
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=archivebox:3000&size=32&format=png"
+      homepage.href: "https://archivebox.${BASE_DOMAIN}"
+      homepage.group: Docker services
+      homepage.description: Web Archiever
+
+  sonic:
+    <<: *default
+    image: valeriansaliou/sonic:v1.3.0
+    expose:
+      - 1491
+    environment:
+      - SEARCH_BACKEND_PASSWORD
+    volumes:
+      - ./conf/archivebox/sonic.cfg:/etc/sonic.cfg:ro
+      - ./data/archivebox/sonic:/var/lib/sonic/store
+
+
+  # # Example: Run scheduled imports in a docker instead of using cron on the
+  # # host machine, add tasks and see more info with archivebox schedule --help
+  # scheduler:
+  #   image: archivebox/archivebox:latest
+  #   command: schedule --foreground --every=day --depth=1 'https://getpocket.com/users/USERNAME/feed/all'
+  #   environment:
+  #     - USE_COLOR=True
+  #     - SHOW_PROGRESS=False
+  #   volumes:
+  #     - ./data:/data
+
+  # # Example: run all your ArchiveBox traffic through a WireGuard VPN tunnel
+  # wireguard:
+  #   image: linuxserver/wireguard
+  #   network_mode: 'service:archivebox'
+  #   cap_add:
+  #     - NET_ADMIN
+  #     - SYS_MODULE
+  #   sysctls:
+  #     - net.ipv4.conf.all.rp_filter=2
+  #     - net.ipv4.conf.all.src_valid_mark=1
+  #   volumes:
+  #     - /lib/modules:/lib/modules
+  #     - ./wireguard.conf:/config/wg0.conf:ro
+
+  # # Example: Run PYWB in parallel and auto-import WARCs from ArchiveBox
+  # pywb:
+  #   image: webrecorder/pywb:latest
+  #   entrypoint: /bin/sh 'wb-manager add default /archivebox/archive/*/warc/*.warc.gz; wayback --proxy;'
+  #   environment:
+  #     - INIT_COLLECTION=archivebox
+  #   ports:
+  #     - 8080:8080
+  #   volumes:
+  #     ./data:/archivebox
+  #     ./data/wayback:/webarchive
+
+ 

@@ -1,0 +1,11 @@
+[Match]
+Name=dockerdns2
+
+[Network]
+DHCP=no
+DNS=169.254.0.53
+Domains=~doc container.doc
+
+[Address]
+Address=169.254.0.2/24
+

@@ -1,0 +1,9 @@
+[Match]
+Name=dockerdns
+
+[Network]
+DHCP=no
+MACVLAN=dockerdns2
+
+[Address]
+Address=169.254.0.1/32
