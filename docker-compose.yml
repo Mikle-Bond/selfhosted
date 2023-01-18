@@ -31,6 +31,8 @@ secrets:
     file: ./secrets/headscale/private.key
   flame_password:
     file: ./secrets/flame/password.txt
+  archivebox:
+    file: ./secrets/archivebox/sonic.txt
 
 x-lsio: &lsio
   environment:
@@ -701,14 +703,20 @@ services:
     <<: *default
       # image: archivebox/archivebox:master
       # NB: temporary override image, see https://github.com/ArchiveBox/ArchiveBox/issues/991
-    image: turian/archivebox:kludge-984-UTF8-bug
+    build:
+      context: build/patch_entrypoint
+      args:
+        IMAGE: turian/archivebox:kludge-984-UTF8-bug
+        ENTRYPOINT: "dumb-init -- /app/bin/docker_entrypoint.sh"
     command: server --quick-init 0.0.0.0:3000
     environment:
       - ALLOWED_HOSTS=*
       - MEDIA_MAX_SIZE=750m
       - SEARCH_BACKEND_ENGINE=sonic
       - SEARCH_BACKEND_HOST_NAME=sonic
-      - SEARCH_BACKEND_PASSWORD
+      - SEARCH_BACKEND_PASSWORD__FILE=/run/secrets/archivebox
+    secrets:
+      - archivebox
     volumes:
       - ./data/archivebox/archive:/data
     healthcheck:
@@ -732,11 +740,18 @@ services:
 
   sonic:
     <<: *default
-    image: valeriansaliou/sonic:v1.3.0
+    build:
+      context: build/patch_entrypoint
+      args:
+        IMAGE: valeriansaliou/sonic:v1.3.0
+        ENTRYPOINT: sonic
+    command: "-c /etc/sonic.cfg"
     expose:
       - 1491
     environment:
-      - SEARCH_BACKEND_PASSWORD
+      - SEARCH_BACKEND_PASSWORD__FILE=/run/secrets/archivebox
+    secrets:
+      - archivebox
     volumes:
       - ./conf/archivebox/sonic.cfg:/etc/sonic.cfg:ro
       - ./data/archivebox/sonic:/var/lib/sonic/store
