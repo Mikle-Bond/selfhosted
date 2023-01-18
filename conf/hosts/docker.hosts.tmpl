@@ -1,0 +1,49 @@
+{{/* vim: sts=2 sw=2 et: */}}
+{{ $use_hostnames := parseBool (coalesce $.Env.USE_HOSTNAMES "true") }}
+{{ $use_autohostnames := parseBool (coalesce $.Env.USE_AUTOHOSTNAMES "false") }}
+{{ $use_containers := parseBool (coalesce $.Env.USE_CONTAINERS "true") }}
+{{ $use_compose := parseBool (coalesce $.Env.USE_COMPOSE "true") }}
+
+{{ $tld := print "." (coalesce $.Env.TLD "doc") }}
+{{ $compose_domain := print "." (coalesce $.Env.COMPOSE_DOMAIN "compose") $tld }}
+{{ $hostname_domain := print "." (coalesce $.Env.HOSTNAME_DOMAIN "hostname") $tld }}
+{{ $container_domain := print "." (coalesce $.Env.CONTAINER_DOMAIN "container") $tld }}
+
+{{ define "entry2" }}
+  {{ $names := compact .Names }}
+  {{ range $index, $addr := .Addr }}
+    {{- $addr.IP }}	{{range $names}}{{replace . "_" "-" 100}} {{end}}
+  {{ end }}
+{{ end }}
+
+{{ range $index, $container := (where . ".State.Running" true) }}
+  {{ with $container }}
+
+    {{ $xip := list (.Networks | first) }}
+    {{ $ip := .Networks }}
+    {{ $names := list "" }}
+
+    {{ if $use_hostnames }}
+      {{ $_autohostname := eq .Hostname (trunc 12 .ID) }}
+      {{ $is_autohostname := hasPrefix .Hostname .ID }}
+      {{ if or (not $is_autohostname) $use_autohostnames }}
+        {{ $name := (print .Hostname $hostname_domain) }}
+        {{ $names = append $names $name }}
+      {{ end }}
+    {{ end }}
+    
+    {{ if $use_containers }}
+      {{ $name := (print .Name $container_domain) }}
+      {{ $names = append $names $name }}
+    {{ end }}
+
+    {{ if and $use_compose (contains .Labels "com.docker.compose.project") }}
+      {{ $service := (index .Labels "com.docker.compose.service") }}
+      {{ $project := (index .Labels "com.docker.compose.project") }}
+      {{ $name := (print $service "." $project $compose_domain) }}
+      {{ $names = append $names $name }}
+    {{ end }}
+    {{- template "entry2" (dict "Names" $names "Addr" $ip) }}
+  {{ end }} 
+{{ end }}
+

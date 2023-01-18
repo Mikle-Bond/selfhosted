@@ -1,0 +1,66 @@
+# vim: set backupcopy=yes :
+{
+	#admin localhost:8019
+	# LetsEncrypt account
+	#email fake@email.com
+	ocsp_stapling off
+}
+
+(tlsdns) {
+	tls {
+		#issuer zerossl {env.ZEROSSL_TOKEN} {
+			dns duckdns {env.DUCKDNS_TOKEN}
+		#}
+	}
+}
+
+(auth) {
+	basicauth {
+		mikle   {env.AUTH_mikle}
+		root    {env.AUTH_root}
+		ter224  {env.AUTH_ter224}
+		user    {env.AUTH_user}
+	}
+}
+
+#(auth_rproxy) {
+#	# {domain} {host:port}
+#	import tlsdns
+#	import auth
+#	reverse_proxy {args.0}
+#}
+#
+#(rproxy) {
+#	import tlsdns
+#	reverse_proxy {args.0}
+#}
+#
+#(consul_proxy) {
+#	import tlsdns
+#	reverse_proxy srv+http://{args.0}.service.consul
+#}
+#
+
+(auth_rproxy) {
+	# {domain} {host:port}
+	{args.0}.ter224.duckdns.org {
+		import tlsdns
+		import auth
+		reverse_proxy {args.1}
+	}
+}
+
+(rproxy) {
+	{args.0}.ter224.duckdns.org {
+		import tlsdns
+		reverse_proxy {args.1}
+	}
+}
+
+(consul_proxy) {
+	{args.0}.ter224.duckdns.org {
+		import tlsdns
+		reverse_proxy srv+http://{args.0}.service.consul
+	}
+}
+
