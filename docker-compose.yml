@@ -27,6 +27,8 @@ networks:
     external: true
 
 secrets:
+  headscale-noise:
+    file: ./secrets/headscale/noise.key
   headscale:
     file: ./secrets/headscale/private.key
   flame_password:
@@ -340,7 +342,7 @@ services:
 
   headscale:
     <<: *default
-    image: headscale/headscale:0.15
+    image: headscale/headscale:0.16.2
     command: headscale serve
     expose:
       - "80/tcp"
@@ -351,22 +353,46 @@ services:
       - ./data/headscale:/var/headscale
     secrets:
       - headscale # /var/secrets/headscale
+      - headscale-noise
     labels:
       caddy: "headscale.${BASE_DOMAIN}"
+      caddy.@hs-other.host: "headscale.${BASE_DOMAIN}"
+      caddy.@hs-options.host: "headscale.${BASE_DOMAIN}"
+      caddy.@hs-options.method: OPTIONS
+
       caddy.0_import: tlsdns
 
-      caddy.1_handle: /metrics
-      caddy.1_handle.import: auth
-      caddy.1_handle.reverse_proxy: "{{upstreams 9090}}"
+      caddy.1_handle: "@hs-options"
+      caddy.1_handle.header.Access-Control-Allow-Origin: "https://ui.headscale.${BASE_DOMAIN}"
+      caddy.1_handle.header.Access-Control-Allow-Headers: "*"
+      caddy.1_handle.header.Access-Control-Allow-Methods: '"POST, GET, OPTIONS, DELETE"'
+      caddy.1_handle.respond: "204"
 
-        #caddy.2_handle_path: /grpc
-        #caddy.2_handle_path.reverse_proxy: "{{upstreams grpc 50443}}" 
+      #caddy.2_handle_path: /grpc
+      #caddy.2_handle_path.reverse_proxy: "{{upstreams grpc 50443}}"
 
-      caddy.3_handle.reverse_proxy: "{{upstreams 80}}"
-        # flame.type: app
-        # flame.name: Headscale
-        # flame.url: "https://headscale.${BASE_DOMAIN}/"
-        # flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=tailscale.com&size=32&format=png"
+      caddy.8_handle: /metrics
+      caddy.8_handle.import: auth
+      caddy.8_handle.reverse_proxy: "{{upstreams 9090}}"
+
+      caddy.9_handle: "@hs-other"
+      caddy.9_handle.reverse_proxy: "{{upstreams 80}}"
+      caddy.9_handle.reverse_proxy.header_down_1: "Access-Control-Allow-Origin https://ui.headscale.${BASE_DOMAIN}"
+      caddy.9_handle.reverse_proxy.header_down_2: "Access-Control-Allow-Headers *"
+      caddy.9_handle.reverse_proxy.header_down_3: 'Access-Control-Allow-Methods "POST, GET, OPTIONS, DELETE"'
+
+
+  headscale-ui:
+    <<: *default
+    image: ghcr.io/gurucomputing/headscale-ui:2022.11.05-beta
+    expose:
+      - "80/tcp"
+    labels:
+      caddy: import rproxy ui.headscale "{{upstreams 80}}"
+      flame.type: app
+      flame.name: Headscale
+      flame.url: "https://ui.headscale.${BASE_DOMAIN}/"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=tailscale.com&size=32&format=png"
 
 
 
