@@ -10,11 +10,9 @@ volumes:
     # mosquitto_data: {}
     # mosquitto_logs: {}
   nextcloud:
-    external:
-      name: nextcloud
+    name: nextcloud
   nextcloud_data:
-    external:
-      name: nextcloud_data
+    name: nextcloud_data
   portainer_data: {}
 
 
