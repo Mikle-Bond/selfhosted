@@ -267,7 +267,7 @@ services:
       - docker-socket-proxy
     volumes:
       - ./data/flame:/app/data
-      # /var/run/docker.sock:/var/run/docker.sock:ro 
+      # /var/run/docker.sock:/var/run/docker.sock:ro
     expose:
       - "5005/tcp"
     labels:
@@ -441,7 +441,7 @@ services:
       # NB: https://github.com/openspeedtest/Speed-Test/issues/4#issuecomment-1229157193
       # It is said that some combination of these is needed...
       #caddy.reverse_proxy.flush_interval: "-1"
-      #caddy.reverse_proxy.buffer_requests: 
+      #caddy.reverse_proxy.buffer_requests:
       caddy.reverse_proxy.max_buffer_size: "50MiB"
       flame.type: app
       flame.name: OpenSpeedTest
@@ -662,7 +662,7 @@ services:
       flame.name: QRcode Generator
       flame.url: "qr.${BASE_DOMAIN}"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
-      homepage.name: QRcode 
+      homepage.name: QRcode
       homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
       homepage.href: "https://qr.${BASE_DOMAIN}"
       homepage.group: Docker services
@@ -818,4 +818,4 @@ services:
   #     ./data:/archivebox
   #     ./data/wayback:/webarchive
 
- 
+
