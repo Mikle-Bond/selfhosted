@@ -2,6 +2,8 @@ version: "3.8"
 
 volumes:
   caddy_conf: {}
+  caddy_acme_root: {}
+  local_ca: {}
   wireguard_data: {}
   dockerhosts: {}
   ntfy_data: {}
@@ -178,6 +180,93 @@ services:
     labels:
       caddy_1: import rproxy portainer "{{upstreams 9000}}"
       caddy_2: import rproxy edge "{{upstreams 8000}}"
+
+
+  acme:
+    <<: *default
+    image: alpine
+    command:
+      - sh
+      - -c
+      - |
+        cp /data/caddy/pki/authorities/local/root.crt /acme/
+        apk add ca-certificates
+        mkdir -p /usr/local/share/ca-certificates/
+        cp /data/caddy/pki/authorities/local/*.crt /usr/local/share/ca-certificates/
+        update-ca-certificates
+        exec sleep infinity
+    volumes:
+      - ./data/caddy:/data:ro
+      - caddy_acme_root:/acme
+      - local_ca:/etc/ssl/certs
+    labels:
+      caddy: caddy
+      caddy.acme_server:
+      caddy.tls: internal
+      #caddy.root: "* /data/caddy/pki/authorities/local/"
+      #caddy.file_server: '"/*.crt"'
+
+
+  test-ost:
+    <<: *default
+    image: reg.ter224.duckdns.org/caddy:${CADDY_VERSION:-latest}
+    environment:
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
+      CADDY_DOCKER_LABEL_PREFIX: ost
+      CADDY_INGRESS_NETWORKS: caddy
+    volumes:
+      - caddy_acme_root:/acme/:ro
+      - ./data/openspeedtest:/data
+      - ./static/Speed-Test:/app:ro
+    labels:
+      ost_0.acme_ca: https://caddy/acme/local/directory
+      ost_0.acme_ca_root: /acme/root.crt
+      ost_0.debug:
+
+      ost_1: ":3000"
+      ost_1.header: "-Server"
+      ost_1.log.format: console
+      ost_1.log.level: DEBUG
+      ost_1.reverse_proxy.transport: http
+      ost_1.reverse_proxy.transport.tls_trusted_ca_certs: /acme/root.crt
+      ost_1.reverse_proxy.transport.tls_server_name: "test-ost"
+      ost_1.reverse_proxy: "https://127.0.0.1:443"
+      ost_1.reverse_proxy.header_up: "Host test-ost"
+      ost_1.reverse_proxy.header_down: "-Server"
+      ost_1.reverse_proxy.flush_interval: -1
+      ost_1.reverse_proxy.buffer_requests:
+      ost_1.reverse_proxy.buffer_responses:
+      ost_1.reverse_proxy.max_buffer_size: "55MiB"
+
+      ost_2: "test-ost"
+      ost_2.log.format: console
+      ost_2.log.level: DEBUG
+      ost_2.tls.alpn: "h1 http/1.1"
+      ost_2.tls.ca: https://caddy/acme/local/directory
+      ost_2.tls.ca_root: /acme/root.crt
+      ost_2.header.Cache-Control: '"no-store, no-cache, max-age=0, no-transform"'
+      ost_2.root: "* /app/"
+      ost_2.file_server.hide: .git
+      ost_2.header.Access-Control-Allow-Origin: "*"
+      ost_2.header.Access-Control-Allow-Methods: '"GET, POST, OPTIONS"'
+      ost_2.header.Access-Control-Allow-Headers: 'Accept,Authorization,Cache-Control,Content-Type,DNT,If-Modified-Since,Keep-Alive,Origin,User-Agent,X-Mx-ReqToken,X-Requested-With'
+      ost_2.@cors.method: OPTIONS
+      ost_2.@cors.host: "test-ost.${BASE_DOMAIN}"
+      ost_2.handle: "@cors"
+      ost_2.handle.header.Access-Control-Allow-Credentials: "true"
+      ost_2.handle.header.Access-Control-Allow-Origin: "{header.origin}"
+      ost_2.handle.respond: "204"
+
+      caddy: "test-ost.${BASE_DOMAIN}"
+      #caddy.reverse_proxy.transport: http
+      #caddy.reverse_proxy.transport.tls_trusted_ca_certs: /data/caddy/pki/authorities/local/root.crt
+      #caddy.reverse_proxy: "https://test-ost"
+      #caddy.reverse_proxy.header_up: "Host {upstream_hostport}"
+      caddy.reverse_proxy: "{{upstreams 3000}}"
+      #caddy.reverse_proxy.flush_interval: -1
+      #caddy.reverse_proxy.buffer_requests:
+      #caddy.reverse_proxy.buffer_responses:
+      #caddy.reverse_proxy.max_buffer_size: "55MiB"
 
 
   caddy:
@@ -433,6 +522,8 @@ services:
     #image: matthiasluedtke/iconserver
     build: https://github.com/mat/besticon.git#master
     image: reg.${BASE_DOMAIN}/iconserver
+    volumes:
+      - local_ca:/etc/ssl/certs:ro
     environment:
       - PORT=80
       - TZ
@@ -454,9 +545,12 @@ services:
     build: build/favicon_proxy
     volumes:
       - ./conf/favicon:/app/conf
+      # local_ca:/etc/ssl/certs:ro
+      - caddy_acme_root:/acme/:ro
     environment:
       - PORT=80
       - TZ
+      - NODE_EXTRA_CA_CERTS=/acme/root.crt
     expose:
       - "80/tcp"
     labels:
@@ -465,7 +559,7 @@ services:
       flame.category: Tools
       flame.name: Favicon Proxy
       flame.url: "https://favicon.${BASE_DOMAIN}/"
-      flame.icon: "http://favicon.${BASE_DOMAIN}/favicon"
+      flame.icon: "https://img.icons8.com/material-outlined/48/null/globe--v1.png"
 
 
   openspeedtest:
@@ -475,14 +569,24 @@ services:
       - "3000/tcp"
     labels:
       caddy: "openspeedtest.${BASE_DOMAIN}"
-      caddy.reverse_proxy: "{{upstreams 3000}}"
-      caddy.reverse_proxy.transport: "http"
-      caddy.reverse_proxy.transport.compression: "off"
+      #caddy.tls.alpn: "h1 http/1.1"
+      #caddy.@tests.path: "/upload*"
+      #caddy.@tests.path: "/downloading*"
+      #caddy.reverse_proxy.transport: "http"
+      #caddy.reverse_proxy.transport.compression: "off"
+      #caddy.reverse_proxy.transport.versions: "1.1"
+      #caddy.log.format: console
+      #caddy.reverse_proxy.transport.dial_timeout: "1m"
+      #caddy.reverse_proxy.transport.max_response_header: "100MiB"
       # NB: https://github.com/openspeedtest/Speed-Test/issues/4#issuecomment-1229157193
       # It is said that some combination of these is needed...
-      #caddy.reverse_proxy.flush_interval: "-1"
-      #caddy.reverse_proxy.buffer_requests:
-      caddy.reverse_proxy.max_buffer_size: "50MiB"
+      caddy.reverse_proxy: "{{upstreams 3000}}"
+      caddy.reverse_proxy.flush_interval: "-1"
+      caddy.reverse_proxy.buffer_requests:
+      caddy.reverse_proxy.buffer_responses:
+      caddy.reverse_proxy.max_buffer_size: "35MiB"
+      #caddy.reverse_proxy: "{{upstreams 3000}}"
+      #caddy.request_body.max_size: "100MiB"
       flame.type: app
       flame.category: Tools
       flame.name: OpenSpeedTest
