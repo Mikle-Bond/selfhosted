@@ -12,7 +12,9 @@
 {{ define "entry2" }}
   {{ $names := compact .Names }}
   {{ range $index, $addr := .Addr }}
-    {{- $addr.IP }}	{{range $names}}{{replace . "_" "-" 100}} {{end}}
+    {{ if $addr.IP }}
+      {{- $addr.IP }}	{{range $names}}{{replace . "_" "-" 100}} {{end}}
+    {{ end }}
   {{ end }}
 {{ end }}
 
