@@ -1057,6 +1057,49 @@ services:
       librex.@forbidden.path_21: "/tests/*"
       librex.1_respond: "@forbidden 404"
 
+
+  b32-301:
+    <<: *default
+    build: build/redirect
+    image: reg.${BASE_DOMAIN}/redirect
+    environment:
+      DOMAIN: b32-301.duckdns.org
+    expose:
+      - "8080/tcp"
+    labels:
+      caddy_1: "*.b32-301.duckdns.org"
+      caddy_1.tls.dns: "duckdns {env.DUCKDNS_TOKEN_MBOND}"
+      caddy_1.reverse_proxy: "{{upstreams 8080}}"
+
+      caddy_2: b32-301.duckdns.org
+      caddy_2.header.Content-Type: text/html
+      caddy_2.respond: "* 200"
+      caddy_2.respond.body: |-
+        `<!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Base32 to HTTP-301</title>
+            <meta name="description" content="b32 to HTTP-301 redirector">
+            <link rel="stylesheet" href="https://unpkg.com/simpledotcss/simple.min.css">
+          </head>
+          <body> <main>
+            <h1>How to:</h1>
+            <p>Take your URI and convert it to base32</p>
+            <p><code>base32 <<<"https://example.com/?foo=bar"</code></p>
+            <p><samp>NB2HI4DTHIXS6ZLYMFWXA3DFFZRW63JPH5TG63Z5MJQXECQ=</samp></p>
+            <p>Replace padding characters "=" (if any) with dashes "-".</br></p>
+            <p><samp>NB2HI4DTHIXS6ZLYMFWXA3DFFZRW63JPH5TG63Z5MJQXECQ-</samp></p>
+            <p>Add letter "x" at the end if the encoded URI ends with "x" or "-".</br></p>
+            <p><samp>NB2HI4DTHIXS6ZLYMFWXA3DFFZRW63JPH5TG63Z5MJQXECQ-x</samp></p>
+            <p>Add suffix ".b32-301.duckdns.org" at the end.</p>
+            <p><samp>NB2HI4DTHIXS6ZLYMFWXA3DFFZRW63JPH5TG63Z5MJQXECQ-x.b32-301.duckdns.org</samp></p>
+            <p>The server will respond with 301 - Moved Permanently, with Location header set to your URI.</p>
+          </main> </body>
+        </html>
+        `
+
+
   # # Example: Run scheduled imports in a docker instead of using cron on the
   # # host machine, add tasks and see more info with archivebox schedule --help
   # scheduler:
