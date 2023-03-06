@@ -1003,6 +1003,20 @@ services:
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=searxng:8080&size=0..32..700&format=png"
 
 
+  redis:
+    <<: *default
+    image: redis:alpine
+    command: redis-server --save "" --appendonly "no"
+    tmpfs:
+      - /var/lib/redis
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+
+
   librex:
     <<: *default
     image: reg.ter224.duckdns.org/caddy:${CADDY_VERSION:-latest}
