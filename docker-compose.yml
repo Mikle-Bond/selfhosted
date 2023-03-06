@@ -92,12 +92,13 @@ x-disabled:
       flame.type: app
       flame.name: QRcode Generator 2
       flame.url: "qr2.${BASE_DOMAIN}"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=0..32..700&format=png"
       homepage.name: QRcode 2
-      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=0..32..700&format=png"
       homepage.href: "https://qr2.${BASE_DOMAIN}"
       homepage.group: Docker services
       homepage.description: Another QRcode Generator
+
   qr2-backend:
     <<: *default
     image: reg.${BASE_DOMAIN}/qr-code-generator/qr-code-service:latest
@@ -248,9 +249,9 @@ services:
       flame.type: app
       flame.name: DashMachine
       flame.url: "dashmachine.${BASE_DOMAIN}"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=dashmachine:5000&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=dashmachine:5000&size=0..32..700&format=png"
       homepage.name: DashMachine
-      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=dashmachine:5000&size=32&format=png"
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=dashmachine:5000&size=0..32..700&format=png"
       homepage.href: "https://dashmachine.${BASE_DOMAIN}"
       homepage.group: Docker services
       homepage.description: DashMachine homepage
@@ -311,9 +312,9 @@ services:
       flame.type: app
       flame.name: Docker Regisry UI
       flame.url: "registry.${BASE_DOMAIN}"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=registry-ui:80&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=registry-ui:80&size=0..32..700&format=png"
       homepage.name: Docker Regisry UI
-      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=registry-ui:80&size=32&format=png"
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=registry-ui:80&size=0..32..700&format=png"
       homepage.href: "https://registry.${BASE_DOMAIN}"
       homepage.group: Docker services
       homepage.description: Custom UI for private Docker registry
@@ -390,17 +391,19 @@ services:
       flame.type: app
       flame.name: Headscale
       flame.url: "https://ui.headscale.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=tailscale.com&size=32&format=png"
-
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=tailscale.com&size=0..32..700&format=png"
 
 
   iconserver:
     <<: *default
-    image: matthiasluedtke/iconserver
+    #image: matthiasluedtke/iconserver
+    build: https://github.com/mat/besticon.git#master
+    image: reg.${BASE_DOMAIN}/iconserver
     environment:
       - PORT=80
       - TZ
       - SERVER_MODE=download
+      - MAX_ICON_SIZE=800
     expose:
       - "80/tcp"
     labels:
@@ -408,7 +411,8 @@ services:
       flame.type: app
       flame.name: Icon Server
       flame.url: "https://iconserver.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=iconserver&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=iconserver&size=0..32..700&format=png"
+
 
   favicon:
     <<: *default
@@ -446,7 +450,7 @@ services:
       flame.type: app
       flame.name: OpenSpeedTest
       flame.url: "https://openspeedtest.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=openspeedtest:3000&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=openspeedtest:3000&size=0..32..700&format=png"
       homepage.name: OpenSpeedTest
       homepage.icon: openspeedtest
       homepage.href: "https://openspeedtest.${BASE_DOMAIN}"
@@ -469,7 +473,7 @@ services:
       flame.type: app
       flame.name: NTFY
       flame.url: "https://ntfy.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=ntfy&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=ntfy&size=0..32..700&format=png"
 
 
   zerotier:
@@ -501,7 +505,7 @@ services:
       flame.type: app
       flame.name: ZeroTier
       flame.url: "https://zt.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=my.zerotier.com&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=my.zerotier.com&size=0..32..700&format=png"
 
 
   ascii:
@@ -526,7 +530,7 @@ services:
       flame.type: app
       flame.name: Bitwarden
       flame.url: "https://vaultwarden.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=vaultwarden&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=vaultwarden&size=0..32..700&format=png"
 
 
   snapdrop:
@@ -543,7 +547,7 @@ services:
       flame.type: app
       flame.name: Snapdrop
       flame.url: "https://snapdrop.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=snapdrop&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=snapdrop&size=0..32..700&format=png"
 
 
   homepage:
@@ -566,7 +570,7 @@ services:
       flame.type: app
       flame.name: Homepage
       flame.url: "https://homepage.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=homepage:3000&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=homepage:3000&size=0..32..700&format=png"
 
 
   netdata:
@@ -602,7 +606,7 @@ services:
       flame.type: app
       flame.name: Netdata
       flame.url: "https://netdata.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=netdata:19999&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=netdata:19999&size=0..32..700&format=png"
 
 
   diun:
@@ -644,7 +648,7 @@ services:
       flame.type: app
       flame.name: SVGOMG
       flame.url: "https://svgomg.${BASE_DOMAIN}/"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=svgomg:8080&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=svgomg:8080&size=0..32..700&format=png"
       homepage.name: SVGOMG
       homepage.icon: SVGOMG
       homepage.href: "https://svgomg.${BASE_DOMAIN}"
@@ -661,9 +665,9 @@ services:
       flame.type: app
       flame.name: QRcode Generator
       flame.url: "qr.${BASE_DOMAIN}"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=0..32..700&format=png"
       homepage.name: QRcode
-      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=32&format=png"
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=0..32..700&format=png"
       homepage.href: "https://qr.${BASE_DOMAIN}"
       homepage.group: Docker services
       homepage.description: QRcode Generator
@@ -749,15 +753,14 @@ services:
       timeout: 20s
       retries: 15
       start_period: 40s
-
     labels:
       caddy: import rproxy archivebox "{{upstreams 3000}}"
       flame.type: app
       flame.name: ArchiveBox
       flame.url: "archivebox.${BASE_DOMAIN}"
-      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=archivebox:3000&size=32&format=png"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=archivebox:3000&size=0..32..700&format=png"
       homepage.name: ArchiveBox
-      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=archivebox:3000&size=32&format=png"
+      homepage.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=archivebox:3000&size=0..32..700&format=png"
       homepage.href: "https://archivebox.${BASE_DOMAIN}"
       homepage.group: Docker services
       homepage.description: Web Archiever
