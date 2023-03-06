@@ -247,6 +247,7 @@ services:
     labels:
       caddy: import rproxy dashmachine "{{upstreams 5000}}"
       flame.type: app
+      flame.category: Homepages
       flame.name: DashMachine
       flame.url: "dashmachine.${BASE_DOMAIN}"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=dashmachine:5000&size=0..32..700&format=png"
@@ -257,7 +258,7 @@ services:
       homepage.description: DashMachine homepage
 
 
-  flame:
+  flame: &flame
     <<: *default
     image: pawelmalak/flame
       # TODO: point it to docker-socket-proxy
@@ -280,7 +281,37 @@ services:
     secrets:
       - flame_password
     environment:
+      # TODO: Password seems to be ignored, when passed as secret sometimes
+      - PASSWORD=dummy
       - PASSWORD_FILE=/run/secrets/flame_password
+
+
+  fdarveau-flame:
+    <<: *flame
+    image: ghcr.io/fdarveau/flame:2022-08-09
+    volumes:
+      - ./data/fdarveau-flame:/app/data
+    labels:
+      caddy: import rproxy fdarveau-flame "{{upstreams 5005}}"
+      flame.type: app
+      flame.category: Homepages
+      flame.name: fdarveau-flame
+      flame.url: "fdarveau-flame.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=fdarveau-flame:5005&size=0..32..700&format=png"
+
+
+  georgesg-flame:
+    <<: *flame
+    image: georgesg/flame
+    volumes:
+      - ./data/georgesg-flame:/app/data
+    labels:
+      caddy: import rproxy georgesg-flame "{{upstreams 5005}}"
+      flame.type: app
+      flame.category: Homepages
+      flame.name: georgesg-flame
+      flame.url: "georgesg-flame.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=georgesg-flame:5005&size=0..32..700&format=png"
 
 
   registry:
@@ -293,6 +324,7 @@ services:
       - ./data/registry:/var/lib/registry
     labels:
       caddy: import auth_rproxy reg "{{upstreams 5000}}"
+
 
   registry-ui:
     <<: *default
@@ -310,6 +342,7 @@ services:
     labels:
       caddy: import rproxy registry "{{upstreams 80}}"
       flame.type: app
+      flame.category: WebUIs
       flame.name: Docker Regisry UI
       flame.url: "registry.${BASE_DOMAIN}"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=registry-ui:80&size=0..32..700&format=png"
@@ -318,6 +351,7 @@ services:
       homepage.href: "https://registry.${BASE_DOMAIN}"
       homepage.group: Docker services
       homepage.description: Custom UI for private Docker registry
+
 
   whoami:
     <<: *default
@@ -389,6 +423,7 @@ services:
     labels:
       caddy: import rproxy ui.headscale "{{upstreams 80}}"
       flame.type: app
+      flame.category: WebUIs
       flame.name: Headscale
       flame.url: "https://ui.headscale.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=tailscale.com&size=0..32..700&format=png"
@@ -409,6 +444,7 @@ services:
     labels:
       caddy: import rproxy iconserver "{{upstreams 80}}"
       flame.type: app
+      flame.category: Tools
       flame.name: Icon Server
       flame.url: "https://iconserver.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=iconserver&size=0..32..700&format=png"
@@ -427,6 +463,7 @@ services:
     labels:
       caddy: import rproxy favicon "{{upstreams 80}}"
       flame.type: app
+      flame.category: Tools
       flame.name: Favicon Proxy
       flame.url: "https://favicon.${BASE_DOMAIN}/"
       flame.icon: "http://favicon.${BASE_DOMAIN}/favicon"
@@ -448,6 +485,7 @@ services:
       #caddy.reverse_proxy.buffer_requests:
       caddy.reverse_proxy.max_buffer_size: "50MiB"
       flame.type: app
+      flame.category: Tools
       flame.name: OpenSpeedTest
       flame.url: "https://openspeedtest.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=openspeedtest:3000&size=0..32..700&format=png"
@@ -471,6 +509,7 @@ services:
     labels:
       caddy: import rproxy ntfy "{{upstreams 80}}"
       flame.type: app
+      flame.category: Tools
       flame.name: NTFY
       flame.url: "https://ntfy.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=ntfy&size=0..32..700&format=png"
@@ -503,6 +542,7 @@ services:
     labels:
       caddy: import rproxy zt "{{upstreams 4000}}"
       flame.type: app
+      flame.category: WebUIs
       flame.name: ZeroTier
       flame.url: "https://zt.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=my.zerotier.com&size=0..32..700&format=png"
@@ -528,6 +568,7 @@ services:
     labels:
       caddy: import rproxy vaultwarden "{{upstreams 80}}"
       flame.type: app
+      flame.category: WebUIs
       flame.name: Bitwarden
       flame.url: "https://vaultwarden.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=vaultwarden&size=0..32..700&format=png"
@@ -545,6 +586,7 @@ services:
     labels:
       caddy: import rproxy snapdrop "{{upstreams 80}}"
       flame.type: app
+      flame.category: Tools
       flame.name: Snapdrop
       flame.url: "https://snapdrop.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=snapdrop&size=0..32..700&format=png"
@@ -568,6 +610,7 @@ services:
     labels:
       caddy: import rproxy homepage "{{upstreams 3000}}"
       flame.type: app
+      flame.category: Homepages
       flame.name: Homepage
       flame.url: "https://homepage.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=homepage:3000&size=0..32..700&format=png"
@@ -604,6 +647,7 @@ services:
     labels:
       caddy: import rproxy netdata "{{upstreams 19999}}"
       flame.type: app
+      flame.category: Tools
       flame.name: Netdata
       flame.url: "https://netdata.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=netdata:19999&size=0..32..700&format=png"
@@ -646,6 +690,7 @@ services:
     labels:
       caddy: import rproxy svgomg "{{upstreams 8080}}"
       flame.type: app
+      flame.category: Tools
       flame.name: SVGOMG
       flame.url: "https://svgomg.${BASE_DOMAIN}/"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=svgomg:8080&size=0..32..700&format=png"
@@ -663,6 +708,7 @@ services:
     labels:
       caddy: import rproxy qr "{{upstreams 80}}"
       flame.type: app
+      flame.category: Tools
       flame.name: QRcode Generator
       flame.url: "qr.${BASE_DOMAIN}"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qr&size=0..32..700&format=png"
@@ -756,6 +802,7 @@ services:
     labels:
       caddy: import rproxy archivebox "{{upstreams 3000}}"
       flame.type: app
+      flame.category: Tools
       flame.name: ArchiveBox
       flame.url: "archivebox.${BASE_DOMAIN}"
       flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=archivebox:3000&size=0..32..700&format=png"
