@@ -107,7 +107,6 @@ x-disabled:
       - "5000/tcp"
 
 
-
 services:
   hosts:
     restart: unless-stopped
@@ -775,12 +774,13 @@ services:
     # Documentation:
     #     https://github.com/ArchiveBox/ArchiveBox/wiki/Docker#docker-compose
     <<: *default
-      # image: archivebox/archivebox:master
-      # NB: temporary override image, see https://github.com/ArchiveBox/ArchiveBox/issues/991
+    # image: archivebox/archivebox:master
+    # NB: temporary override image, see https://github.com/ArchiveBox/ArchiveBox/issues/991
+    # IMAGE: turian/archivebox:kludge-984-UTF8-bug
     build:
       context: build/patch_entrypoint
       args:
-        IMAGE: turian/archivebox:kludge-984-UTF8-bug
+        IMAGE: archivebox/archivebox:dev # sha-8a96563
         ENTRYPOINT: "dumb-init -- /app/bin/docker_entrypoint.sh"
     command: server --quick-init 0.0.0.0:3000
     environment:
