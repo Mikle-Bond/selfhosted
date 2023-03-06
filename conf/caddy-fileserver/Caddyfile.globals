@@ -1,0 +1,48 @@
+# vim: set backupcopy=yes :
+{
+	acme_ca https://caddy/acme/local/directory
+	acme_ca_root /acme/root.crt
+}
+
+(local_ca) {
+	tls {
+		ca https://caddy/acme/local/directory
+		ca_root /acme/root.crt
+	}
+}
+
+(cors) {
+	header {
+		Access-Control-Allow-Origin *
+		Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		Access-Control-Allow-Headers 'Accept,Authorization,Cache-Control,Content-Type,DNT,If-Modified-Since,Keep-Alive,Origin,User-Agent,X-Mx-ReqToken,X-Requested-With'
+	}
+	@cors {
+		method OPTIONS
+		host {args.0}.{env.BASE_DOMAIN}
+	}
+	handle "@cors" {
+		header {
+			Access-Control-Allow-Credentials "true"
+			Access-Control-Allow-Origin "{header.origin}"
+		}
+		respond 204
+	}
+}
+
+(serve_git) {
+	root * {args.0}
+	file_server {
+		hide .git
+	}
+}
+
+(serve_all) {
+	{args.0} {
+		import local_ca
+		# import cors {args.0}
+		import serve_git /app/
+	}
+}
+	
+

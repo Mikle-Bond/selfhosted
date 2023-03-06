@@ -4,6 +4,7 @@
 	# LetsEncrypt account
 	#email fake@email.com
 	ocsp_stapling off
+	#debug
 }
 
 (tlsdns) {
@@ -43,22 +44,35 @@
 
 (auth_rproxy) {
 	# {domain} {host:port}
-	{args.0}.ter224.duckdns.org {
+	{args.0}.{env.BASE_DOMAIN} {
 		import tlsdns
 		import auth
 		reverse_proxy {args.1}
 	}
 }
 
+(tls_rproxy) {
+	{args.0}.{env.BASE_DOMAIN} {
+		import tlsdns
+		reverse_proxy https://{args.0} {
+			header_up Host {upstream_hostport}
+			transport http {
+			      tls_trusted_ca_certs /data/caddy/pki/authorities/local/root.crt
+			      tls_server_name {upstream_host}
+			}
+		}
+	}
+}
+
 (rproxy) {
-	{args.0}.ter224.duckdns.org {
+	{args.0}.{env.BASE_DOMAIN} {
 		import tlsdns
 		reverse_proxy {args.1}
 	}
 }
 
 (consul_proxy) {
-	{args.0}.ter224.duckdns.org {
+	{args.0}.{env.BASE_DOMAIN} {
 		import tlsdns
 		reverse_proxy srv+http://{args.0}.service.consul
 	}

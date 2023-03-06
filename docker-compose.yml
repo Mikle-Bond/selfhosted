@@ -16,6 +16,7 @@ volumes:
   nextcloud_data:
     external: true
   portainer_data: {}
+  qrazybox_certs: {}
 
 
 networks:
@@ -299,7 +300,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock # TODO
       - ./conf/caddy:/config
       - ./data/caddy:/data
-      - ./static/qrazybox:/qrazybox
       - ./static/www:/www
       # /home/launcher/updates:/launcher
       - nextcloud:/nextcloud/var/www/html
@@ -312,17 +312,35 @@ services:
       #caddy_0.file_server:
       #caddy_0.templates:
 
-      caddy_1: "qrazybox.${BASE_DOMAIN}"
-      caddy_1.import: tlsdns
-      caddy_1.root: "* /qrazybox/"
-      caddy_1.tls.alpn: h2 h3
-      caddy_1.file_server.hide: .git
-
       caddy_2: mbond.duckdns.org
       caddy_2.tls.dns: duckdns "{env.DUCKDNS_TOKEN_MBOND}"
-      caddy_1.tls.alpn: h2 h3
+      caddy_2.tls.alpn: h2 h3
       caddy_2.respond: "* TBD 200"
       caddy_2.log:
+
+
+  qrazybox:
+    <<: *default
+    image: reg.ter224.duckdns.org/caddy:${CADDY_VERSION:-latest}
+    environment:
+      CADDY_DOCKER_CADDYFILE_PATH: /config/include/Caddyfile.globals
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
+      CADDY_DOCKER_LABEL_PREFIX: qrbox
+      CADDY_INGRESS_NETWORKS: caddy
+      BASE_DOMAIN:
+    volumes:
+      - caddy_acme_root:/acme/:ro
+      - qrazybox_certs:/data
+      - ./conf/caddy-fileserver:/config/include
+      - ./static/qrazybox:/app:ro
+    labels:
+      qrbox: import serve_all qrazybox
+      caddy: import tls_rproxy qrazybox
+      flame.type: app
+      flame.category: Tools
+      flame.name: QRazyBox
+      flame.url: "qrazybox.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=qrazybox&size=0..32..700&format=png"
 
 
   dashmachine:
