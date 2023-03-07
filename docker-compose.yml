@@ -959,6 +959,29 @@ services:
       - ./data/archivebox/sonic:/var/lib/sonic/store
 
 
+  troddit:
+    <<: *default
+    #image: bsyed/troddit
+    build: https://github.com/Mikle-Bond/troddit.git#${TRODDIT_VERSION:-main}
+    image: reg.${BASE_DOMAIN}/troddit:${TRODDIT_VERSION:-main}
+    expose:
+      - "3000/tcp"
+    env_file: secrets/troddit/auth.env
+    environment:
+      - REDDIT_REDIRECT=https://troddit.${BASE_DOMAIN}/api/auth/callback/reddit
+      # CLIENT_SECRET=<from secrets>
+      # CLIENT_ID=<from secrets>
+      # NEXTAUTH_SECRET=<from secrets>
+      - NEXTAUTH_URL=https://troddit.${BASE_DOMAIN}
+    labels:
+      caddy: import rproxy troddit "{{upstreams 3000}}"
+      flame.type: app
+      flame.category: WebUIs
+      flame.name: Troddit
+      flame.url: "troddit.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=troddit:3000&size=0..32..700&format=png"
+
+
   nozomi:
     <<: *default
     build: https://github.com/Mikle-Bond/nozomi.git#debug
