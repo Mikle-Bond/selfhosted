@@ -38,6 +38,8 @@ secrets:
     file: ./secrets/flame/password.txt
   archivebox:
     file: ./secrets/archivebox/sonic.txt
+  jqplay:
+    file: ./secrets/jqplay/db.env
 
 x-lsio: &lsio
   environment:
@@ -823,6 +825,7 @@ services:
       homepage.group: Docker services
       homepage.description: SVG optimizations tool
 
+
   qr:
     <<: *default
     image: bizzycolah/qrcode-generator:latest
@@ -935,6 +938,7 @@ services:
       homepage.href: "https://archivebox.${BASE_DOMAIN}"
       homepage.group: Docker services
       homepage.description: Web Archiever
+
 
   sonic:
     <<: *default
@@ -1113,6 +1117,56 @@ services:
         </html>
         `
 
+
+  jqplay:
+    <<: *default
+    build: build/jqplay
+    image: reg.${BASE_DOMAIN}/jqplay:latest
+    entrypoint: ''
+    command:
+      - sh
+      - -c
+      - |
+        . /run/secrets/jqplay
+        export DATABASE_URL=postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@jqplay-db/$$POSTGRES_DB?sslmode=disable
+        exec jqplay
+    depends_on:
+      - jqplay-db
+    expose:
+      - "8080/tcp"
+    secrets:
+      - jqplay
+    labels:
+      caddy: import rproxy jqplay "{{upstreams 8080}}"
+      flame.type: app
+      flame.category: Tools
+      flame.name: jqplay
+      flame.url: "jqplay.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=jqplay:8080&size=0..32..700&format=png"
+
+
+  jqplay-db:
+    <<: *default
+    image: postgres:14
+    env_file: ./secrets/jqplay/db.env
+    volumes:
+      - ./build/jqplay/server/db.sql:/docker-entrypoint-initdb.d/db.sql:ro
+
+
+  jqkungfu:
+    <<: *default
+    # https://github.com/Mikle-Bond/jqkungfu
+    image: reg.${BASE_DOMAIN}/jqkungfu
+    build: build/jqkungfu
+    expose:
+      - "3000/tcp"
+    labels:
+      caddy: import rproxy jqkungfu "{{upstreams 3000}}"
+      flame.type: app
+      flame.category: Tools
+      flame.name: jqKungFu
+      flame.url: "jqkungfu.${BASE_DOMAIN}"
+      flame.icon: "http://iconserver.${BASE_DOMAIN}/icon?url=jqkungfu:3000&size=0..32..700&format=png"
 
   # # Example: Run scheduled imports in a docker instead of using cron on the
   # # host machine, add tasks and see more info with archivebox schedule --help
