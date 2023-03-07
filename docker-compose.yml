@@ -19,6 +19,7 @@ volumes:
   portainer_data: {}
   qrazybox_certs: {}
   librex_certs: {}
+  nexus_data: {}
 
 
 networks:
@@ -1139,6 +1140,17 @@ services:
           </main> </body>
         </html>
         `
+
+
+  nexus:
+    <<: *default
+    image: sonatype/nexus3
+    volumes:
+      - nexus_data:/nexus-data
+    expose:
+      - "8081/tcp"
+    labels:
+      caddy: import rproxy nexus "{{upstreams 8081}}"
 
 
   jqplay:
